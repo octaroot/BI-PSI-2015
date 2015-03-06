@@ -18,18 +18,18 @@ class OutputCommand {
 
     public enum MessageTypes {LOGIN, PASSWORD, OK, BAD_CHECKSUM, LOGIN_FAILED, SYNTAX_ERROR, TIMEOUT}
 
-    public void sendMessage(String message, PrintWriter stream)
+    public void sendMessage(String message)
     {
-        System.out.println("[DEBUG][>][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Sending \"" + message + "\\r\\n\"");
+        System.out.println("[DEBUG][<][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Sending \"" + message + "\\r\\n\"");
 
         message += "\r\n";
         stream.print(message);
         stream.flush();
     }
 
-    public void sendMessage(MessageTypes message, PrintWriter stream)
+    public void sendMessage(MessageTypes message)
     {
-        sendMessage(generateMessage(message), stream);
+        sendMessage(generateMessage(message));
     }
 
     public static String generateMessage(MessageTypes messageType) {

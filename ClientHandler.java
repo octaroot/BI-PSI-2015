@@ -40,18 +40,25 @@ class ClientHandler implements Runnable {
                 System.exit(1);
             }
 
-            oc.sendMessage(OutputCommand.MessageTypes.LOGIN, output);
+            oc.sendMessage(OutputCommand.MessageTypes.LOGIN);
 
-            long time = System.currentTimeMillis();
             String inputLine;
 
-            while (!clientSocket.isClosed() && (inputLine = input.readLine()) != null) {
-                System.out.println("[DEBUG] > Client " + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + " (time " + time + ") sent: " + inputLine);
+            while (!clientSocket.isClosed()) {
+
+                try {
+                    if ((inputLine = input.readLine()) == null)
+                        break;
+                } catch (Exception e) {
+                    break;
+                }
+
+                System.out.println("[DEBUG][>][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received: " + inputLine);
 
                 switch (clientState) {
                     case USERNAME:
                         clientRobotName = inputLine;
-                        oc.sendMessage(OutputCommand.MessageTypes.PASSWORD, output);
+                        oc.sendMessage(OutputCommand.MessageTypes.PASSWORD);
                         clientState = ClientStates.PASSWORD;
                         break;
                     case PASSWORD:
@@ -65,27 +72,28 @@ class ClientHandler implements Runnable {
                             if (!Authenticator.credentialsValid(clientRobotName, inputLine))
                                 throw new Exception("Credentials invalid");
                         } catch (Exception e) {
-                            oc.sendMessage(OutputCommand.MessageTypes.LOGIN_FAILED, output);
+                            oc.sendMessage(OutputCommand.MessageTypes.LOGIN_FAILED);
+                            input.close();
+                            output.close();
                             clientSocket.close();
-                            break;
+                            return;
                         }
 
-                        oc.sendMessage(OutputCommand.MessageTypes.OK, output);
+                        oc.sendMessage(OutputCommand.MessageTypes.OK);
                         clientState = ClientStates.AUTHENTICATED;
                         break;
                     case AUTHENTICATED:
-                        oc.sendMessage("999 ECHO " + inputLine, output);
-
+                        oc.sendMessage("999 ECHO " + inputLine);
                 }
             }
 
-            System.out.printf("ENDING");
+            System.out.println("[DEBUG][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] CLOSING CONNECTION");
 
-            if (!clientSocket.isClosed())
+            if (!clientSocket.isClosed()) {
+                output.close();
+                input.close();
                 clientSocket.close();
-
-            output.close();
-            input.close();
+            }
 
         } catch (IOException e) {
             //ooooops
