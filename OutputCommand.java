@@ -1,22 +1,33 @@
 import java.io.PrintWriter;
+import java.net.Socket;
 
 /**
  * @author martin (cernama9@fit.cvut.cz)
  * @since 6.3.15.
  */
 class OutputCommand {
+
+    private Socket clientSocket;
+    private PrintWriter stream;
+
+    public OutputCommand(PrintWriter stream, Socket clientSocket)
+    {
+        this.stream = stream;
+        this.clientSocket = clientSocket;
+    }
+
     public enum MessageTypes {LOGIN, PASSWORD, OK, BAD_CHECKSUM, LOGIN_FAILED, SYNTAX_ERROR, TIMEOUT}
 
-    public static void sendMessage(String message, PrintWriter stream)
+    public void sendMessage(String message, PrintWriter stream)
     {
-        System.out.println("[DEBUG] Sending " + message + "\\r\\n");
+        System.out.println("[DEBUG][>][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Sending \"" + message + "\\r\\n\"");
 
         message += "\r\n";
         stream.print(message);
         stream.flush();
     }
 
-    public static void sendMessage(MessageTypes message, PrintWriter stream)
+    public void sendMessage(MessageTypes message, PrintWriter stream)
     {
         sendMessage(generateMessage(message), stream);
     }
