@@ -16,6 +16,7 @@ class ClientHandler implements Runnable {
     private ClientStates clientState;
     private String clientRobotName;
     private OutputCommand oc;
+    private Boolean lineMode;
 
     private enum ClientStates {USERNAME, PASSWORD, AUTHENTICATED}
 
@@ -26,6 +27,7 @@ class ClientHandler implements Runnable {
         this.output = null;
         this.clientState = ClientStates.USERNAME;
         this.oc = null;
+        this.lineMode = true;
     }
 
     @Override
@@ -42,18 +44,21 @@ class ClientHandler implements Runnable {
 
             oc.sendMessage(OutputCommand.MessageTypes.LOGIN);
 
-            String inputLine;
+            String inputLine = "";
 
             while (!clientSocket.isClosed()) {
 
-                try {
-                    if ((inputLine = input.readLine()) == null)
+                //dokud nemuzeme posilat FOTO, tak klido jedem texove
+                if (lineMode) {
+                    try {
+                        if ((inputLine = input.readLine()) == null)
+                            break;
+                    } catch (Exception e) {
                         break;
-                } catch (Exception e) {
-                    break;
-                }
+                    }
 
-                System.out.println("[DEBUG][>][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received: " + inputLine);
+                    System.out.println("[DEBUG][>][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received: " + inputLine);
+                }
 
                 switch (clientState) {
                     case USERNAME:
@@ -81,9 +86,14 @@ class ClientHandler implements Runnable {
 
                         oc.sendMessage(OutputCommand.MessageTypes.OK);
                         clientState = ClientStates.AUTHENTICATED;
+                        lineMode = false;
                         break;
                     case AUTHENTICATED:
-                        oc.sendMessage("999 ECHO " + inputLine);
+
+                        //tady budem asi brat znak po znaku (5x pro INFO, pak prehodime na textovej rezim - precteme radku)
+                        //pripadne jeste nacteme delku + 4 byty CRC
+
+                        //oc.sendMessage("999 ECHO " + inputLine);
                 }
             }
 
