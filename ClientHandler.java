@@ -29,7 +29,8 @@ class ClientHandler implements Runnable {
             }
 
             long time = System.currentTimeMillis();
-            String inputLine, outputLine;
+            String inputLine;
+
             while ((inputLine = input.readLine()) != null) {
                 System.out.println("request (time " + time + "): " + inputLine);
                 output.println("ECHO (time " + time + "): " + inputLine);
