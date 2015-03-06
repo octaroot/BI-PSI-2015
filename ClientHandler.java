@@ -1,6 +1,8 @@
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.LinkedList;
 
 /**
  * @author martin (cernama9@fit.cvut.cz)
@@ -13,6 +15,7 @@ class ClientHandler implements Runnable {
     private PrintWriter output;
     private ClientStates clientState;
     private String clientRobotName;
+    private OutputCommand oc;
 
     private enum ClientStates {USERNAME, PASSWORD, AUTHENTICATED}
 
@@ -22,6 +25,7 @@ class ClientHandler implements Runnable {
         this.input = null;
         this.output = null;
         this.clientState = ClientStates.USERNAME;
+        this.oc = null;
     }
 
     @Override
@@ -30,12 +34,13 @@ class ClientHandler implements Runnable {
             try {
                 output = new PrintWriter(clientSocket.getOutputStream(), true);
                 input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                oc = new OutputCommand(output, clientSocket);
             } catch (IOException e) {
                 System.err.println("Couldn't get I/O.");
                 System.exit(1);
             }
 
-            OutputCommand.sendMessage(OutputCommand.MessageTypes.LOGIN, output);
+            oc.sendMessage(OutputCommand.MessageTypes.LOGIN, output);
 
             long time = System.currentTimeMillis();
             String inputLine;
@@ -46,33 +51,30 @@ class ClientHandler implements Runnable {
                 switch (clientState) {
                     case USERNAME:
                         clientRobotName = inputLine;
-                        OutputCommand.sendMessage(OutputCommand.MessageTypes.PASSWORD, output);
+                        oc.sendMessage(OutputCommand.MessageTypes.PASSWORD, output);
                         clientState = ClientStates.PASSWORD;
                         break;
                     case PASSWORD:
                         UsernameLexicalAnalyzer usernameAnalyzer = new UsernameLexicalAnalyzer();
                         PasswordLexicalAnalyzer passwordAnalyzer = new PasswordLexicalAnalyzer();
 
-                        try
-                        {
+                        try {
                             usernameAnalyzer.parseTokens(clientRobotName);
                             passwordAnalyzer.parseTokens(inputLine);
 
                             if (!Authenticator.credentialsValid(clientRobotName, inputLine))
                                 throw new Exception("Credentials invalid");
-                        }
-                        catch (Exception e)
-                        {
-                            OutputCommand.sendMessage(OutputCommand.MessageTypes.LOGIN_FAILED, output);
+                        } catch (Exception e) {
+                            oc.sendMessage(OutputCommand.MessageTypes.LOGIN_FAILED, output);
                             clientSocket.close();
                             break;
                         }
 
-                        OutputCommand.sendMessage(OutputCommand.MessageTypes.OK, output);
+                        oc.sendMessage(OutputCommand.MessageTypes.OK, output);
                         clientState = ClientStates.AUTHENTICATED;
                         break;
                     case AUTHENTICATED:
-                        OutputCommand.sendMessage("999 ECHO " + inputLine, output);
+                        oc.sendMessage("999 ECHO " + inputLine, output);
 
                 }
             }
@@ -86,7 +88,7 @@ class ClientHandler implements Runnable {
             input.close();
 
         } catch (IOException e) {
-            //report exception somewhere.
+            //ooooops
             e.printStackTrace();
         }
     }
