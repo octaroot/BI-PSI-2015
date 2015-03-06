@@ -13,6 +13,7 @@ class OutputCommand {
 
         message += "\r\n";
         stream.print(message);
+        stream.flush();
     }
 
     public static void sendMessage(MessageTypes message, PrintWriter stream)
