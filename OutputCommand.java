@@ -9,7 +9,8 @@ class OutputCommand {
 
     public static void sendMessage(String message, PrintWriter stream)
     {
-        //mozna by slo pouzit println?
+        System.out.println("[DEBUG] Sending " + message + "\\r\\n");
+
         message += "\r\n";
         stream.print(message);
     }
