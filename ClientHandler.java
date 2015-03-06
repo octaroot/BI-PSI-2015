@@ -5,7 +5,7 @@ import java.net.Socket;
  * @author martin (cernama9@fit.cvut.cz)
  * @since 6.3.15.
  */
-public class ClientHandler implements Runnable {
+class ClientHandler implements Runnable {
 
     private Socket clientSocket;
     private BufferedReader input;

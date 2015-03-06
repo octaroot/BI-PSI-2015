@@ -6,7 +6,7 @@ import java.net.Socket;
  * @author martin (cernama9@fit.cvut.cz)
  * @since 6.3.15.
  */
-public class Server {
+class Server {
 
     private int port;
     private ServerSocket socket;
