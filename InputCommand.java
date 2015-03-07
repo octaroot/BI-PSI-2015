@@ -66,10 +66,11 @@ final class InputCommand {
         do {
             try {
                 char c = (char) stream.read();
-                inputBuilder.append(c);
 
                 if (c == stop)
                     break;
+
+                inputBuilder.append(c);
 
             } catch (Exception e) {
                 return null;
