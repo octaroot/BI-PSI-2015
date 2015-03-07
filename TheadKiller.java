@@ -22,7 +22,6 @@ final class TheadKiller implements Runnable {
 
             try {
                 Thread.sleep(1000);
-                System.err.print(".");
                 timeout--;
             } catch (InterruptedException e) {
                 System.err.println("Couldn't put ThreadKiller to sleep");
@@ -31,6 +30,5 @@ final class TheadKiller implements Runnable {
         }
 
         runnable.kill();
-        System.err.println("killing a thread");
     }
 }
