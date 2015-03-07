@@ -2,7 +2,7 @@ import java.util.LinkedList;
 
 /**
  * @author martin (cernama9@fit.cvut.cz)
- * @since 6.3.15.
+ * @since 7.3.15.
  */
 class InfoMessageLexicalAnalyzer extends LexicalAnalyzer {
 
