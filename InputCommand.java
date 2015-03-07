@@ -49,6 +49,17 @@ final class InputCommand {
         return inputLine;
     }
 
+    public byte[] readBytes(int count) {
+        byte data[] = new byte[count];
+        try {
+            for (int i = 0; i < count; i++) data[i] = (byte) stream.read();
+        } catch (Exception e) {
+            return null;
+        }
+
+        return data;
+    }
+
     public String readTill(char stop) {
         StringBuilder inputBuilder = new StringBuilder();
 
