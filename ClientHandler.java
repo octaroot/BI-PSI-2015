@@ -10,233 +10,294 @@ import java.util.regex.Pattern;
  * @author martin (cernama9@fit.cvut.cz)
  * @since 6.3.15.
  */
-class ClientHandler implements Runnable {
+final class ClientHandler implements Runnable
+{
 
-    private Socket clientSocket;
-    private InputStream input;
-    private PrintWriter output;
-    private ClientStates clientState;
-    private String clientRobotName;
-    private OutputCommand oc;
-    private InputCommand ic;
-    private Boolean lineMode;
+	private Socket        clientSocket;
+	private InputStream   input;
+	private PrintWriter   output;
+	private ClientStates  clientState;
+	private String        clientRobotName;
+	private OutputCommand oc;
+	private InputCommand  ic;
+	private Boolean       lineMode;
 
-    private enum ClientStates {USERNAME, PASSWORD, AUTHENTICATED, INFO_MESSAGE, FOTO_MESSAGE}
+	/**
+	 * Constructs the ClientHandler
+	 *
+	 * @param clientSocket Client's socket
+	 */
+	public ClientHandler(Socket clientSocket)
+	{
+		this.clientSocket = clientSocket;
+		this.clientRobotName = null;
+		this.input = null;
+		this.output = null;
+		this.clientState = ClientStates.USERNAME;
+		this.oc = null;
+		this.lineMode = true;
+	}
 
-    public ClientHandler(Socket clientSocket) {
-        this.clientSocket = clientSocket;
-        this.clientRobotName = null;
-        this.input = null;
-        this.output = null;
-        this.clientState = ClientStates.USERNAME;
-        this.oc = null;
-        this.lineMode = true;
-    }
+	/**
+	 * Closes the connection. Flushes output and waits a for a short time before closing it
+	 */
+	private void closeConnection()
+	{
+		try
+		{
+			output.flush();
+			Thread.sleep(100);
 
-    private void closeConnection() {
-        try {
-            output.flush();
-            Thread.sleep(100);
+			input.close();
+			output.close();
 
-            input.close();
-            output.close();
+			if (!clientSocket.isClosed()) clientSocket.close();
+		}
+		catch (Exception e)
+		{
+			System.err.println("Unable to gracefully close connection.");
+		}
+	}
 
-            if (!clientSocket.isClosed())
-                clientSocket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
+	/**
+	 * In case the connection hans for too long, this method can be called to gracefully timeout
+	 */
+	public void kill()
+	{
+		System.err.println("[DEBUG][!][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] We took " +
+				"too long, ClientHandler killer called. Sending TIMEOUT now");
+		oc.sendMessage(OutputCommand.MessageTypes.TIMEOUT);
+		closeConnection();
+	}
 
-    public void kill()
-    {
-        System.err.println("[DEBUG][!][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] We took too long, ClientHandler killer called. Sending TIMEOUT now");
-        oc.sendMessage(OutputCommand.MessageTypes.TIMEOUT);
-        closeConnection();
-    }
+	/**
+	 * Main method, sets up streams and handles all communication logic
+	 */
+	@Override
+	public void run()
+	{
+		try
+		{
+			output = new PrintWriter(clientSocket.getOutputStream(), true);
+			input = clientSocket.getInputStream();
 
-    @Override
-    public void run() {
-        try {
-            output = new PrintWriter(clientSocket.getOutputStream(), true);
-            input = clientSocket.getInputStream();
+			oc = new OutputCommand(output, clientSocket);
+			ic = new InputCommand(input, clientSocket);
+		}
+		catch (IOException e)
+		{
+			System.err.println("Unable to open streams");
+			return;
+		}
 
-            oc = new OutputCommand(output, clientSocket);
-            ic = new InputCommand(input, clientSocket);
-        } catch (IOException e) {
-            System.err.println("Couldn't get I/O.");
-            System.exit(1);
-        }
+		/**
+		 * Send a LOGIN message to client
+		 */
+		oc.sendMessage(OutputCommand.MessageTypes.LOGIN);
 
-        oc.sendMessage(OutputCommand.MessageTypes.LOGIN);
+		String inputLine = "";
 
-        String inputLine = "";
+		/**
+		 * Main loop
+		 */
+		while (!clientSocket.isClosed())
+		{
 
-        while (!clientSocket.isClosed()) {
+			/**
+			 * We like to read till \r\n whenever we can
+			 */
+			if (lineMode)
+			{
+				inputLine = ic.readLine();
+				if (inputLine == null)
+				{
+					closeConnection();
+					return;
+				}
+			}
 
-            //dokud nemuzeme posilat FOTO, tak klido jedem texove
-            if (lineMode) {
-                inputLine = ic.readLine();
-                if (inputLine == null) {
-                    closeConnection();
-                    return;
-                }
-            }
+			/**
+			 * Mail communication logic switch
+			 */
+			switch (clientState)
+			{
+				case USERNAME:
+					clientRobotName = inputLine;
+					oc.sendMessage(OutputCommand.MessageTypes.PASSWORD);
+					clientState = ClientStates.PASSWORD;
+					break;
 
-            switch (clientState) {
-                case USERNAME:
-                    clientRobotName = inputLine;
-                    oc.sendMessage(OutputCommand.MessageTypes.PASSWORD);
-                    clientState = ClientStates.PASSWORD;
-                    break;
-                case PASSWORD:
-                    UsernameLexicalAnalyzer usernameAnalyzer = new UsernameLexicalAnalyzer();
-                    PasswordLexicalAnalyzer passwordAnalyzer = new PasswordLexicalAnalyzer();
+				case PASSWORD:
+					UsernameLexicalAnalyzer usernameAnalyzer = new UsernameLexicalAnalyzer();
+					PasswordLexicalAnalyzer passwordAnalyzer = new PasswordLexicalAnalyzer();
 
-                    try {
-                        usernameAnalyzer.parseTokens(clientRobotName);
-                        passwordAnalyzer.parseTokens(inputLine);
+					try
+					{
+						usernameAnalyzer.parseTokens(clientRobotName);
+						passwordAnalyzer.parseTokens(inputLine);
 
-                        if (!Authenticator.credentialsValid(clientRobotName, inputLine))
-                            throw new Exception("Credentials invalid");
-                    } catch (Exception e) {
-                        oc.sendMessage(OutputCommand.MessageTypes.LOGIN_FAILED);
-                        closeConnection();
-                        return;
-                    }
+						if (!Authenticator.areCredentialsValid(clientRobotName, inputLine))
+							throw new Exception("Credentials invalid");
+					}
+					catch (Exception e)
+					{
+						oc.sendMessage(OutputCommand.MessageTypes.LOGIN_FAILED);
+						closeConnection();
+						return;
+					}
 
-                    oc.sendMessage(OutputCommand.MessageTypes.OK);
-                    clientState = ClientStates.AUTHENTICATED;
-                    lineMode = false;
-                    break;
-                case AUTHENTICATED:
-                    PayloadTypeLexicalInstancedAnalyzer payloadTypeAnalyzer = new PayloadTypeLexicalInstancedAnalyzer();
-                    StringBuilder sb = new StringBuilder();
+					oc.sendMessage(OutputCommand.MessageTypes.OK);
+					clientState = ClientStates.AUTHENTICATED;
+					lineMode = false;
+					break;
 
-                    try {
-                        for (int i = 0; i < 5; i++) {
+				case AUTHENTICATED:
+					PayloadTypeLexicalInstancedAnalyzer payloadTypeAnalyzer = new PayloadTypeLexicalInstancedAnalyzer();
+					StringBuilder sb = new StringBuilder();
 
-                            char c = ic.readChar();
+					try
+					{
+						for (int i = 0; i < 5; i++)
+						{
+							char c = ic.readChar();
 
-                            sb.append(c);
-                            payloadTypeAnalyzer.parseCharacter(c);
-                        }
+							sb.append(c);
+							payloadTypeAnalyzer.parseCharacter(c);
+						}
 
-                        PayloadTypeLexicalInstancedAnalyzer.PayloadModes payloadMode = payloadTypeAnalyzer.getPayloadType();
+						PayloadTypeLexicalInstancedAnalyzer.PayloadModes payloadMode = payloadTypeAnalyzer.getPayloadType();
 
-                        System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Recognized message type - " + payloadMode);
+						System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Recognized message type - " + payloadMode);
 
-                        switch (payloadMode) {
-                            case INFO:
-                                lineMode = true;
-                                clientState = ClientStates.INFO_MESSAGE;
-                                break;
-                            case FOTO:
-                                lineMode = false;
-                                clientState = ClientStates.FOTO_MESSAGE;
-                        }
+						switch (payloadMode)
+						{
+							case INFO:
+								lineMode = true;
+								clientState = ClientStates.INFO_MESSAGE;
+								break;
+							case FOTO:
+								lineMode = false;
+								clientState = ClientStates.FOTO_MESSAGE;
+						}
 
-                    } catch (SyntaxIncorrect syntaxIncorrect) {
-                        System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad message format. Received: \"" + sb.toString() + "\"");
-                        oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
-                        closeConnection();
-                        return;
-                    } catch (Exception e) {
-                        //stream already ended
-                        closeConnection();
-                        return;
-                    }
-                    break;
-                case INFO_MESSAGE:
-                    InfoMessageLexicalAnalyzer infoMessageAnalyzer = new InfoMessageLexicalAnalyzer();
-                    infoMessageAnalyzer.parseTokens(inputLine);
+					}
+					catch (SyntaxIncorrect syntaxIncorrect)
+					{
+						System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad message format. Received: \"" + sb.toString() + "\"");
+						oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
+						closeConnection();
+						return;
+					}
+					catch (Exception e)
+					{
+						closeConnection();
+						return;
+					}
+					break;
 
-                    oc.sendMessage(OutputCommand.MessageTypes.OK);
-                    clientState = ClientStates.AUTHENTICATED;
-                    lineMode = false;
-                    break;
-                case FOTO_MESSAGE:
+				case INFO_MESSAGE:
+					InfoMessageLexicalAnalyzer infoMessageAnalyzer = new InfoMessageLexicalAnalyzer();
+					infoMessageAnalyzer.parseTokens(inputLine);
 
-                    System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] FOTO_MESSAGE start");
+					oc.sendMessage(OutputCommand.MessageTypes.OK);
+					clientState = ClientStates.AUTHENTICATED;
+					lineMode = false;
+					break;
 
-                    FotoMessageLengthLexicalInstancedAnalyzer fotoMessageLengthAnalyzer = new FotoMessageLengthLexicalInstancedAnalyzer();
-                    StringBuilder messageLengthBuilder = new StringBuilder();
+				case FOTO_MESSAGE:
+					FotoMessageLengthLexicalInstancedAnalyzer fotoMessageLengthAnalyzer = new FotoMessageLengthLexicalInstancedAnalyzer();
+					StringBuilder messageLengthBuilder = new StringBuilder();
 
-                    while (!fotoMessageLengthAnalyzer.isStateFinal()) {
-                        try {
-                            char c = ic.readChar();
-                            fotoMessageLengthAnalyzer.parseCharacter(c);
-                            if (fotoMessageLengthAnalyzer.isStateFinal()) break;
-                            messageLengthBuilder.append(c);
-                        } catch (SyntaxIncorrect syntaxIncorrect) {
-                            System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad FOTO message length format. Received: \"" + messageLengthBuilder.toString() + "\"");
-                            oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
-                            closeConnection();
-                            return;
-                        } catch (Exception e) {
-                            //stream already ended
-                            closeConnection();
-                            return;
-                        }
-                    }
+					while (!fotoMessageLengthAnalyzer.isStateFinal())
+					{
+						try
+						{
+							char c = ic.readChar();
+							fotoMessageLengthAnalyzer.parseCharacter(c);
+							if (fotoMessageLengthAnalyzer.isStateFinal()) break;
+							messageLengthBuilder.append(c);
+						}
+						catch (SyntaxIncorrect syntaxIncorrect)
+						{
+							System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad FOTO message length format. Received: \"" +
+									messageLengthBuilder.toString() + "\"");
+							oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
+							closeConnection();
+							return;
+						}
+						catch (Exception e)
+						{
+							closeConnection();
+							return;
+						}
+					}
 
-                    String dataLengthString = messageLengthBuilder.toString();
+					String dataLengthString = messageLengthBuilder.toString();
 
-                    System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] FOTO_MESSAGE read size - \"" + dataLengthString + "\"");
+					int dataLength;
 
-                    int dataLength;
+					if (!Pattern.matches("^\\d+$", dataLengthString))
+					{
+						System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad image length format. Received: \"" + dataLengthString + "\"");
+						oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
+						closeConnection();
+						return;
+					}
 
-                    if (!Pattern.matches("^\\d+$", dataLengthString)) {
-                        System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad image length format. Received: \"" + dataLengthString + "\"");
-                        oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
-                        closeConnection();
-                        return;
-                    }
+					dataLength = Integer.parseInt(dataLengthString);
 
-                    dataLength = Integer.parseInt(dataLengthString);
+					byte imageData[] = ic.readBytes(dataLength);
 
-                    System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] FOTO_MESSAGE casted length to int \"" + dataLength + "\". reading that amount of bytes now");
+					if (imageData == null)
+					{
+						closeConnection();
+						return;
+					}
 
-                    byte imageData[] = ic.readBytes(dataLength);
+					System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() +
+							"] Received " + dataLengthString + " bytes of image data");
+					byte correctChecksumBytes[] = ic.readBytes(4);
 
-                    if (imageData == null) {
-                        closeConnection();
-                        return;
-                    }
+					if (correctChecksumBytes == null)
+					{
+						closeConnection();
+						return;
+					}
 
-                    System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received " + dataLengthString + " bytes of image data");
-                    byte correctChecksumBytes[] = ic.readBytes(4);
+					System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() +
+							"] Received 4 bytes of image checksum");
+					ByteBuffer bb = ByteBuffer.wrap(correctChecksumBytes);
+					bb.order(ByteOrder.BIG_ENDIAN);
+					int correctChecksum = bb.getInt();
 
-                    if (correctChecksumBytes == null) {
-                        closeConnection();
-                        return;
-                    }
+					final int calculatedChecksum = ImageDataValidator.calculateChecksum(imageData);
 
-                    System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received 4 bytes of image checksum");
-                    ByteBuffer bb = ByteBuffer.wrap(correctChecksumBytes);
-                    bb.order(ByteOrder.BIG_ENDIAN);
-                    int correctChecksum = bb.getInt();
+					if (calculatedChecksum != correctChecksum)
+					{
+						System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Checksum mismatch. Received: " + correctChecksum + ", " +
+								"calculated: " + calculatedChecksum);
+						oc.sendMessage(OutputCommand.MessageTypes.BAD_CHECKSUM);
+						clientState = ClientStates.AUTHENTICATED;
+						break;
+					}
 
-                    final int calculatedChecksum = ImageDataValidator.calculateChecksum(imageData);
+					//TODO: save image to disk
 
-                    if (calculatedChecksum != correctChecksum) {
-                        System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Checksum mismatch. Received: " + correctChecksum + ", calculated: " + calculatedChecksum);
-                        oc.sendMessage(OutputCommand.MessageTypes.BAD_CHECKSUM);
-                        clientState = ClientStates.AUTHENTICATED;
-                        break;
-                    }
+					oc.sendMessage(OutputCommand.MessageTypes.OK);
+					clientState = ClientStates.AUTHENTICATED;
 
-                    //TODO: save image to disk
+					break;
+			}
+		}
 
-                    oc.sendMessage(OutputCommand.MessageTypes.OK);
-                    clientState = ClientStates.AUTHENTICATED;
+		closeConnection();
+	}
 
-                    break;
-            }
-        }
-
-        closeConnection();
-    }
+	/**
+	 * Client state during the communication
+	 */
+	private enum ClientStates
+	{
+		USERNAME, PASSWORD, AUTHENTICATED, INFO_MESSAGE, FOTO_MESSAGE
+	}
 }

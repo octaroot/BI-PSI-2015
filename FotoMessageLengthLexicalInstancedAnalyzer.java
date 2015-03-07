@@ -4,57 +4,91 @@ import java.util.LinkedList;
  * @author martin (cernama9@fit.cvut.cz)
  * @since 7.3.15.
  */
-class FotoMessageLengthLexicalInstancedAnalyzer extends LexicalAnalyzer {
 
-    protected enum AnalyzerStates {EMPTY, NUMBER, DONE}
+/**
+ * Derived lexical analyzer capable of analyzing the string one char at a time.
+ */
+final class FotoMessageLengthLexicalInstancedAnalyzer extends LexicalAnalyzer
+{
 
-    private AnalyzerStates state;
-    private LinkedList<String> tokens;
+	private AnalyzerStates     state;
+	private LinkedList<String> tokens;
 
-    FotoMessageLengthLexicalInstancedAnalyzer() {
-        this.state = AnalyzerStates.EMPTY;
-        this.tokens = new LinkedList<String>();
-    }
+	/**
+	 * Constructor
+	 */
+	FotoMessageLengthLexicalInstancedAnalyzer()
+	{
+		this.state = AnalyzerStates.EMPTY;
+		this.tokens = new LinkedList<String>();
+	}
 
-    public void parseCharacter(char c) throws SyntaxIncorrect {
-        handleInput(c);
-    }
+	/**
+	 * Processes a character
+	 *
+	 * @param c Character of the input string
+	 * @throws SyntaxIncorrect
+	 */
+	public void parseCharacter(char c) throws SyntaxIncorrect
+	{
+		handleInput(c);
+	}
 
-    public boolean isStateFinal()
-    {
-        return state == AnalyzerStates.DONE;
-    }
+	/**
+	 * Checks whether the analyzer has reached a final state
+	 *
+	 * @return True if final state has been reached, false otherwise
+	 */
+	public boolean isStateFinal()
+	{
+		return state == AnalyzerStates.DONE;
+	}
 
-    private void handleInput(char c) throws SyntaxIncorrect
-    {
-        switch (state) {
+	/**
+	 * Internal input handling
+	 *
+	 * @param c Character of the input string
+	 * @throws SyntaxIncorrect
+	 */
+	private void handleInput(char c) throws SyntaxIncorrect
+	{
+		switch (state)
+		{
 
-            case NUMBER:
-                if (c == ' ') {
-                    state = AnalyzerStates.DONE;
-                    break;
-                }
-            case EMPTY:
-                if (c < '0' || c > '9') throw new SyntaxIncorrect("Length has to be numerical");
-                state = AnalyzerStates.NUMBER;
-                break;
-            case DONE:
-                throw new SyntaxIncorrect("Cannot read anymore, word already accepted");
-        }
-    }
+			case NUMBER:
+				if (c == ' ')
+				{
+					state = AnalyzerStates.DONE;
+					break;
+				}
+			case EMPTY:
+				if (c < '0' || c > '9') throw new SyntaxIncorrect("Length has to be numerical");
+				state = AnalyzerStates.NUMBER;
+				break;
+			case DONE:
+				throw new SyntaxIncorrect("Cannot read anymore, word already accepted");
+		}
+	}
 
-    @Override
-    public LinkedList<String> parseTokens(String input) throws SyntaxIncorrect, InputNotAccepted {
+	@Override
+	public LinkedList<String> parseTokens(String input) throws SyntaxIncorrect, InputNotAccepted
+	{
 
-        for (int i = 0; i < input.length(); i++) {
-            handleInput(input.charAt(i));
-        }
+		for (int i = 0; i < input.length(); i++)
+		{
+			handleInput(input.charAt(i));
+		}
 
-        if (state != AnalyzerStates.DONE)
-            throw new InputNotAccepted("Length not specified - not accepted by PayloadTypeLexicalAnalyzer");
+		if (state != AnalyzerStates.DONE)
+			throw new InputNotAccepted("Length not specified - not accepted by PayloadTypeLexicalAnalyzer");
 
-        tokens.add(state.toString());
+		tokens.add(state.toString());
 
-        return tokens;
-    }
+		return tokens;
+	}
+
+	protected enum AnalyzerStates
+	{
+		EMPTY, NUMBER, DONE
+	}
 }
