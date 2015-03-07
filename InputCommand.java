@@ -1,4 +1,4 @@
-import java.io.BufferedReader;
+import java.io.InputStream;
 import java.net.Socket;
 
 /**
@@ -7,12 +7,12 @@ import java.net.Socket;
  */
 final class InputCommand {
 
-    BufferedReader stream;
     Socket clientSocket;
+    InputStream stream;
 
-    InputCommand(BufferedReader stream, Socket clientSocket) {
-        this.stream = stream;
+    InputCommand(InputStream stream, Socket clientSocket) {
         this.clientSocket = clientSocket;
+        this.stream = stream;
     }
 
     public String readLine() {
@@ -22,7 +22,14 @@ final class InputCommand {
 
         while (!reachedEndOfLine) {
             try {
-                char c = (char) stream.read();
+
+                int data = stream.read();
+
+                if (data == -1)
+                    return null;
+
+                char c = (char) data;
+
                 inputBuilder.append(c);
 
                 switch (c) {
@@ -51,8 +58,17 @@ final class InputCommand {
 
     public byte[] readBytes(int count) {
         byte data[] = new byte[count];
+
         try {
-            for (int i = 0; i < count; i++) data[i] = (byte) stream.read();
+            for (int i = 0; i < count; i++)
+            {
+                int readData = stream.read();
+
+                if (readData == -1)
+                    return null;
+
+                data[i] = (byte) readData;
+            }
         } catch (Exception e) {
             return null;
         }
@@ -60,12 +76,35 @@ final class InputCommand {
         return data;
     }
 
+    public char readChar() throws Exception {
+        int readData;
+
+        try {
+            readData = stream.read();
+
+            if (readData == -1)
+                throw new Exception("Uname to read single char");
+
+        }
+        catch (Exception ignored)
+        {
+            throw new Exception("Uname to read single char");
+        }
+
+        return (char) readData;
+    }
+
     public String readTill(char stop) {
         StringBuilder inputBuilder = new StringBuilder();
 
         do {
             try {
-                char c = (char) stream.read();
+                int data = stream.read();
+
+                if (data == -1)
+                    return null;
+
+                char c = (char) data;
 
                 if (c == stop)
                     break;
