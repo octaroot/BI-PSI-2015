@@ -3,6 +3,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.regex.Pattern;
 
 /**
  * @author martin (cernama9@fit.cvut.cz)
@@ -108,7 +111,7 @@ class ClientHandler implements Runnable {
 
                             PayloadTypeLexicalInstancedAnalyzer.PayloadModes payloadMode = payloadTypeAnalyzer.getPayloadType();
 
-                            System.out.println("[INFO] Recognized message type - " + payloadMode);
+                            System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Recognized message type - " + payloadMode);
 
                             switch (payloadMode) {
                                 case INFO:
@@ -121,7 +124,7 @@ class ClientHandler implements Runnable {
                             }
 
                         } catch (SyntaxIncorrect syntaxIncorrect) {
-                            System.out.println("[INFO] Bad message format. Received: \"" + sb.toString() + "\"");
+                            System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad message format. Received: \"" + sb.toString() + "\"");
                             oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
                             closeConnection();
                         }
@@ -136,8 +139,39 @@ class ClientHandler implements Runnable {
                         break;
                     case FOTO_MESSAGE:
 
-                        //TODO
-                        closeConnection();
+                        String dataLengthString = ic.readTill(' ');
+                        int dataLength;
+
+                        if (!Pattern.matches("^\\d+$", dataLengthString))
+                        {
+                            System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad image length format. Received: \"" + dataLengthString + "\"");
+                            oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
+                            closeConnection();
+                            break;
+                        }
+
+                        dataLength = Integer.parseInt(dataLengthString);
+
+                        byte imageData[] = ic.readBytes(dataLength);
+                        System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received " + dataLengthString + " bytes of image data");
+                        byte correctChecksumBytes[] = ic.readBytes(4);
+                        System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received 4 bytes of image checksum");
+                        ByteBuffer bb = ByteBuffer.wrap(correctChecksumBytes);
+                        bb.order(ByteOrder.BIG_ENDIAN);
+                        int correctChecksum = bb.getInt();
+
+                        final int calculatedChecksum = ImageDataValidator.calculateChecksum(imageData);
+
+                        if (calculatedChecksum != correctChecksum)
+                        {
+                            System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Checksum mismatch. Received: " + correctChecksum + ", calculated: " + calculatedChecksum);
+                            oc.sendMessage(OutputCommand.MessageTypes.BAD_CHECKSUM);
+                        }
+
+                        //TODO: save image to disk
+
+                        oc.sendMessage(OutputCommand.MessageTypes.OK);
+                        clientState = ClientStates.AUTHENTICATED;
 
                         break;
                 }
