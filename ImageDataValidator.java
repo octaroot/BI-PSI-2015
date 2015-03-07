@@ -7,7 +7,7 @@ final class ImageDataValidator {
         int total = 0;
 
         for (byte aData : data) {
-            total += (int) aData;
+            total += (aData & 0xFF);
         }
 
         return total;
