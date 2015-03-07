@@ -18,7 +18,7 @@ class ClientHandler implements Runnable {
     private OutputCommand oc;
     private Boolean lineMode;
 
-    private enum ClientStates {USERNAME, PASSWORD, AUTHENTICATED}
+    private enum ClientStates {USERNAME, PASSWORD, AUTHENTICATED, INFO_MESSAGE, FOTO_MESSAGE}
 
     public ClientHandler(Socket clientSocket) {
         this.clientSocket = clientSocket;
@@ -46,18 +46,45 @@ class ClientHandler implements Runnable {
 
             String inputLine = "";
 
+            StringBuilder inputBuilder = new StringBuilder();
+            boolean carriageReturnDetected = false;
+
             while (!clientSocket.isClosed()) {
 
                 //dokud nemuzeme posilat FOTO, tak klido jedem texove
                 if (lineMode) {
-                    try {
-                        if ((inputLine = input.readLine()) == null)
+                    boolean reachedEndOfLine = false;
+
+                    while (!reachedEndOfLine) {
+                        try {
+                            char c = (char) input.read();
+                            inputBuilder.append(c);
+                            //System.err.println(c);
+
+                            switch (c) {
+                                case '\r':
+                                    carriageReturnDetected = true;
+                                    break;
+                                case '\n':
+                                    if (carriageReturnDetected)
+                                    {
+                                        reachedEndOfLine = true;
+                                        carriageReturnDetected = false;
+                                    }
+                                    break;
+                                default:
+                                    carriageReturnDetected = false;
+                            }
+                        } catch (Exception e) {
                             break;
-                    } catch (Exception e) {
-                        break;
+                        }
                     }
 
                     System.out.println("[DEBUG][>][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received: " + inputLine);
+
+                    if (!reachedEndOfLine) break;
+                    inputLine = inputBuilder.substring(0, inputBuilder.length() - 2);
+                    inputBuilder.setLength(0);
                 }
 
                 switch (clientState) {
@@ -89,11 +116,46 @@ class ClientHandler implements Runnable {
                         lineMode = false;
                         break;
                     case AUTHENTICATED:
+                        PayloadTypeLexicalInstancedAnalyzer payloadTypeAnalyzer = new PayloadTypeLexicalInstancedAnalyzer();
+                        StringBuilder sb = new StringBuilder();
 
-                        //tady budem asi brat znak po znaku (5x pro INFO, pak prehodime na textovej rezim - precteme radku)
-                        //pripadne jeste nacteme delku + 4 byty CRC
+                        try {
+                            for (int i = 0; i < 5; i++) {
+                                char c = (char) input.read();
 
-                        //oc.sendMessage("999 ECHO " + inputLine);
+                                sb.append(c);
+                                payloadTypeAnalyzer.parseCharacter(c);
+                            }
+
+                            PayloadTypeLexicalInstancedAnalyzer.PayloadModes payloadMode = payloadTypeAnalyzer.getPayloadType();
+
+                            System.out.println("[INFO] Recognized message type - " + payloadMode);
+
+                            switch (payloadMode) {
+                                case INFO:
+                                    lineMode = true;
+                                    clientState = ClientStates.INFO_MESSAGE;
+                                    break;
+                                case FOTO:
+                                    clientState = ClientStates.FOTO_MESSAGE;
+                            }
+
+                        } catch (SyntaxIncorrect syntaxIncorrect) {
+                            System.out.println("[INFO] Bad message format. Received: \"" + sb.toString() + "\"");
+                            oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
+                            input.close();
+                            output.close();
+                            clientSocket.close();
+                        }
+                        break;
+                    case INFO_MESSAGE:
+                        InfoMessageLexicalAnalyzer infoMessageAnalyzer = new InfoMessageLexicalAnalyzer();
+                        infoMessageAnalyzer.parseTokens(inputLine);
+
+                        oc.sendMessage(OutputCommand.MessageTypes.OK);
+                        clientState = ClientStates.AUTHENTICATED;
+                        lineMode = false;
+                        break;
                 }
             }
 
