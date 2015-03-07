@@ -2,7 +2,7 @@
  * @author martin (cernama9@fit.cvut.cz)
  * @since 7.3.15.
  */
-public class TheadKiller implements Runnable {
+final class TheadKiller implements Runnable {
 
     Thread target;
     ClientHandler runnable;
