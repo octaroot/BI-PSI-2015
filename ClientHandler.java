@@ -46,6 +46,13 @@ class ClientHandler implements Runnable {
         }
     }
 
+    public void kill()
+    {
+        System.err.println("[DEBUG][!][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] We took too long, ClientHandler killer called. Sending TIMEOUT now");
+        oc.sendMessage(OutputCommand.MessageTypes.TIMEOUT);
+        closeConnection();
+    }
+
     @Override
     public void run() {
         try {
