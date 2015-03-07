@@ -60,8 +60,7 @@ final class InputCommand {
         byte data[] = new byte[count];
 
         try {
-            for (int i = 0; i < count; i++)
-            {
+            for (int i = 0; i < count; i++) {
                 int readData = stream.read();
 
                 if (readData == -1)
@@ -84,10 +83,7 @@ final class InputCommand {
 
             if (readData == -1)
                 throw new Exception("Uname to read single char");
-
-        }
-        catch (Exception ignored)
-        {
+        } catch (Exception ignored) {
             throw new Exception("Uname to read single char");
         }
 
@@ -111,6 +107,8 @@ final class InputCommand {
 
                 inputBuilder.append(c);
 
+            } catch (IllegalStateException e) {
+                throw e;
             } catch (Exception e) {
                 return null;
             }
