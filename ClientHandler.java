@@ -16,6 +16,7 @@ class ClientHandler implements Runnable {
     private ClientStates clientState;
     private String clientRobotName;
     private OutputCommand oc;
+    private InputCommand ic;
     private Boolean lineMode;
 
     private enum ClientStates {USERNAME, PASSWORD, AUTHENTICATED, INFO_MESSAGE, FOTO_MESSAGE}
@@ -30,6 +31,19 @@ class ClientHandler implements Runnable {
         this.lineMode = true;
     }
 
+    private void closeConnection() {
+        try {
+            if (!this.clientSocket.isClosed()) {
+                System.out.println("[DEBUG][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] CLOSING CONNECTION");
+                this.clientSocket.close();
+            }
+            this.input.close();
+            this.output.close();
+        } catch (Exception ignored) {
+
+        }
+    }
+
     @Override
     public void run() {
         try {
@@ -37,6 +51,7 @@ class ClientHandler implements Runnable {
                 output = new PrintWriter(clientSocket.getOutputStream(), true);
                 input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
                 oc = new OutputCommand(output, clientSocket);
+                ic = new InputCommand(input, clientSocket);
             } catch (IOException e) {
                 System.err.println("Couldn't get I/O.");
                 System.exit(1);
@@ -46,45 +61,11 @@ class ClientHandler implements Runnable {
 
             String inputLine = "";
 
-            StringBuilder inputBuilder = new StringBuilder();
-            boolean carriageReturnDetected = false;
-
             while (!clientSocket.isClosed()) {
 
                 //dokud nemuzeme posilat FOTO, tak klido jedem texove
                 if (lineMode) {
-                    boolean reachedEndOfLine = false;
-
-                    while (!reachedEndOfLine) {
-                        try {
-                            char c = (char) input.read();
-                            inputBuilder.append(c);
-                            //System.err.println(c);
-
-                            switch (c) {
-                                case '\r':
-                                    carriageReturnDetected = true;
-                                    break;
-                                case '\n':
-                                    if (carriageReturnDetected)
-                                    {
-                                        reachedEndOfLine = true;
-                                        carriageReturnDetected = false;
-                                    }
-                                    break;
-                                default:
-                                    carriageReturnDetected = false;
-                            }
-                        } catch (Exception e) {
-                            break;
-                        }
-                    }
-
-                    System.out.println("[DEBUG][>][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received: " + inputLine);
-
-                    if (!reachedEndOfLine) break;
-                    inputLine = inputBuilder.substring(0, inputBuilder.length() - 2);
-                    inputBuilder.setLength(0);
+                    inputLine = ic.readLine();
                 }
 
                 switch (clientState) {
@@ -105,9 +86,7 @@ class ClientHandler implements Runnable {
                                 throw new Exception("Credentials invalid");
                         } catch (Exception e) {
                             oc.sendMessage(OutputCommand.MessageTypes.LOGIN_FAILED);
-                            input.close();
-                            output.close();
-                            clientSocket.close();
+                            closeConnection();
                             return;
                         }
 
@@ -137,15 +116,14 @@ class ClientHandler implements Runnable {
                                     clientState = ClientStates.INFO_MESSAGE;
                                     break;
                                 case FOTO:
+                                    lineMode = false;
                                     clientState = ClientStates.FOTO_MESSAGE;
                             }
 
                         } catch (SyntaxIncorrect syntaxIncorrect) {
                             System.out.println("[INFO] Bad message format. Received: \"" + sb.toString() + "\"");
                             oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
-                            input.close();
-                            output.close();
-                            clientSocket.close();
+                            closeConnection();
                         }
                         break;
                     case INFO_MESSAGE:
@@ -156,16 +134,16 @@ class ClientHandler implements Runnable {
                         clientState = ClientStates.AUTHENTICATED;
                         lineMode = false;
                         break;
+                    case FOTO_MESSAGE:
+
+                        //TODO
+                        closeConnection();
+
+                        break;
                 }
             }
 
-            System.out.println("[DEBUG][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] CLOSING CONNECTION");
-
-            if (!clientSocket.isClosed()) {
-                output.close();
-                input.close();
-                clientSocket.close();
-            }
+            closeConnection();
 
         } catch (IOException e) {
             //ooooops
