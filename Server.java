@@ -38,7 +38,11 @@ class Server {
                 System.exit(1);
             }
             System.out.println("Client accepted from: " + clientSocket.getInetAddress() + ":" + clientSocket.getPort());
-            new Thread(new ClientHandler(clientSocket)).start();
+            ClientHandler runnable = new ClientHandler(clientSocket);
+            Thread clientThread = new Thread(runnable);
+            clientThread.start();
+            new Thread(new TheadKiller(clientThread, runnable)).start();
+
         }
 
         socket.close();
