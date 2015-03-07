@@ -1,4 +1,6 @@
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -129,9 +131,11 @@ class ClientHandler implements Runnable {
                         System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad message format. Received: \"" + sb.toString() + "\"");
                         oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
                         closeConnection();
+                        return;
                     } catch (Exception e) {
                         //stream already ended
                         closeConnection();
+                        return;
                     }
                     break;
                 case INFO_MESSAGE:
@@ -146,12 +150,28 @@ class ClientHandler implements Runnable {
 
                     System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] FOTO_MESSAGE start");
 
-                    String dataLengthString = ic.readTill(' ');
+                    FotoMessageLengthLexicalInstancedAnalyzer fotoMessageLengthAnalyzer = new FotoMessageLengthLexicalInstancedAnalyzer();
+                    StringBuilder messageLengthBuilder = new StringBuilder();
 
-                    if (dataLengthString == null) {
-                        closeConnection();
-                        return;
+                    while (!fotoMessageLengthAnalyzer.isStateFinal()) {
+                        try {
+                            char c = ic.readChar();
+                            fotoMessageLengthAnalyzer.parseCharacter(c);
+                            if (fotoMessageLengthAnalyzer.isStateFinal()) break;
+                            messageLengthBuilder.append(c);
+                        } catch (SyntaxIncorrect syntaxIncorrect) {
+                            System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad FOTO message length format. Received: \"" + messageLengthBuilder.toString() + "\"");
+                            oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
+                            closeConnection();
+                            return;
+                        } catch (Exception e) {
+                            //stream already ended
+                            closeConnection();
+                            return;
+                        }
                     }
+
+                    String dataLengthString = messageLengthBuilder.toString();
 
                     System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] FOTO_MESSAGE read size - \"" + dataLengthString + "\"");
 
@@ -161,7 +181,7 @@ class ClientHandler implements Runnable {
                         System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Bad image length format. Received: \"" + dataLengthString + "\"");
                         oc.sendMessage(OutputCommand.MessageTypes.SYNTAX_ERROR);
                         closeConnection();
-                        break;
+                        return;
                     }
 
                     dataLength = Integer.parseInt(dataLengthString);
@@ -193,6 +213,8 @@ class ClientHandler implements Runnable {
                     if (calculatedChecksum != correctChecksum) {
                         System.out.println("[INFO][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Checksum mismatch. Received: " + correctChecksum + ", calculated: " + calculatedChecksum);
                         oc.sendMessage(OutputCommand.MessageTypes.BAD_CHECKSUM);
+                        clientState = ClientStates.AUTHENTICATED;
+                        break;
                     }
 
                     //TODO: save image to disk
