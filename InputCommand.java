@@ -44,15 +44,41 @@ final class InputCommand {
         }
 
         final String inputLine = inputBuilder.substring(0, inputBuilder.length() - 2);
-        final String message = "[DEBUG][>][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received " + inputLine.length() + " bytes";
-
-        if (inputLine.length() > 20) {
-            System.out.println(message + ". First 20: " + inputLine.substring(0,19));
-        } else {
-            System.out.println(message + ": " +  inputLine);
-        }
+        printLogMessage(inputLine);
 
         return inputLine;
+    }
+
+    public String readTill(char stop) {
+        StringBuilder inputBuilder = new StringBuilder();
+
+        do {
+            try {
+                char c = (char) stream.read();
+                inputBuilder.append(c);
+
+                if (c == stop)
+                    break;
+
+            } catch (Exception e) {
+                return null;
+            }
+        } while (true);
+
+        final String inputLine = inputBuilder.toString();
+        printLogMessage(inputLine);
+
+        return inputLine;
+    }
+
+    private void printLogMessage(String received) {
+        final String message = "[DEBUG][>][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] Received " + received.length() + " bytes";
+
+        if (received.length() > 20) {
+            System.out.println(message + ". First 20: " + received.substring(0, 19));
+        } else {
+            System.out.println(message + ": " + received);
+        }
     }
 
 }
