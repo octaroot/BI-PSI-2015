@@ -35,14 +35,18 @@ class ClientHandler implements Runnable {
 
     private void closeConnection() {
         try {
-            if (!this.clientSocket.isClosed()) {
-                System.out.println("[DEBUG][ ][" + clientSocket.getInetAddress() + ":" + clientSocket.getPort() + "] CLOSING CONNECTION");
-                this.clientSocket.close();
-            }
-            this.input.close();
-            this.output.close();
-        } catch (Exception ignored) {
+            output.flush();
+            Thread.sleep(100);
 
+            input.close();
+            output.close();
+
+            if (!clientSocket.isClosed())
+                clientSocket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
